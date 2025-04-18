@@ -1,0 +1,8 @@
+PyQt5
+requests
+beautifulsoup4
+Pillow
+requests-html
+selenium
+undetected-chromedriver
+distutils
