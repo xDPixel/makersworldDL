@@ -146,45 +146,76 @@ class App:
 
         # --- Style Configuration ---
         style = ttk.Style(self.root)
-        # Ensure the theme is applied - ThemedTk does this, but explicit style is fine
-        # style.theme_use(THEME_NAME) # ThemedTk sets this
+        # Custom Deep Blue Ocean Theme Colors
+        DEEP_BLUE_BG = "#0a192f"
+        OCEAN_DARK = "#112240"
+        OCEAN_ACCENT = "#233554"
+        OCEAN_BUTTON = "#1e3a5c"
+        OCEAN_BUTTON_ACTIVE = "#2563eb"
+        TEXT_COLOR = "#e0e6ed"
+        ACCENT_COLOR = "#64ffda"
+        ERROR_COLOR = "#ff5370"
 
-        # --- Widgets ---
+        self.root.configure(bg=DEEP_BLUE_BG)
+        style.theme_use("clam")
+        style.configure("TFrame", background=DEEP_BLUE_BG)
+        style.configure("TLabel", background=DEEP_BLUE_BG, foreground=TEXT_COLOR)
+        style.configure("TButton", background=OCEAN_BUTTON, foreground=TEXT_COLOR, borderwidth=1, focusthickness=2, focuscolor=OCEAN_BUTTON_ACTIVE)
+        style.map("TButton",
+            background=[("active", OCEAN_BUTTON_ACTIVE), ("pressed", ACCENT_COLOR)],
+            foreground=[("active", TEXT_COLOR), ("pressed", OCEAN_DARK)])
+        style.configure("TEntry", fieldbackground=OCEAN_DARK, foreground=TEXT_COLOR)
+        style.configure("TScrollbar", background=OCEAN_DARK, troughcolor=OCEAN_DARK)
+
         main_frame = ttk.Frame(self.root, padding="10 10 10 10")
         main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame.configure(style="TFrame")
 
         # Input Label
-        input_label = ttk.Label(main_frame, text="Paste WebP URLs (one per line):")
+        input_label = ttk.Label(main_frame, text="Links list :", style="TLabel")
         input_label.pack(pady=(0, 5), anchor="w")
 
-        # Text Area for URLs
-        self.url_text = scrolledtext.ScrolledText(main_frame, height=10, width=60,
-                                                  wrap=tk.WORD,
-                                                  bg=style.lookup('TFrame', 'background'), # Match theme background
-                                                  fg=style.lookup('TLabel', 'foreground')) # Match theme foreground
-        self.url_text.pack(fill=tk.BOTH, expand=True)
-        self.url_text.configure(font=('TkDefaultFont', 10)) # Adjust font if needed
+        # Queue Listbox
+        queue_label = ttk.Label(main_frame, text="Queue:", style="TLabel")
+        queue_label.pack(anchor="w")
+        self.queue_listbox = tk.Listbox(main_frame, height=7, width=60, bg=OCEAN_DARK, fg=TEXT_COLOR, selectbackground=OCEAN_ACCENT, selectforeground=DEEP_BLUE_BG, highlightbackground=OCEAN_ACCENT, relief=tk.FLAT, borderwidth=0)
+        self.queue_listbox.pack(fill=tk.BOTH, expand=False, pady=(0,5))
 
         # Button Frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(10, 5))
+        button_frame = ttk.Frame(main_frame, style="TFrame")
+        button_frame.pack(fill=tk.X, pady=(5, 5))
+
+        # Paste Button
+        self.paste_button = ttk.Button(button_frame, text="Paste", command=self.paste_clipboard, style="TButton")
+        self.paste_button.pack(side=tk.LEFT, padx=(0, 10))
 
         # Convert Button
-        self.convert_button = ttk.Button(button_frame, text="Convert & Save PNGs", command=self.start_processing)
+        self.convert_button = ttk.Button(button_frame, text="Convert & Save PNGs", command=self.start_processing, style="TButton")
         self.convert_button.pack(side=tk.LEFT, padx=(0, 10))
 
-        # Clear Button
-        self.clear_button = ttk.Button(button_frame, text="Clear", command=self.clear_fields)
-        self.clear_button.pack(side=tk.LEFT)
+        # Clear Queue Button
+        self.clear_queue_button = ttk.Button(button_frame, text="Clear Queue", command=self.clear_queue, style="TButton")
+        self.clear_queue_button.pack(side=tk.LEFT)
 
         # Status Label
         self.status_var = tk.StringVar()
-        self.status_label = ttk.Label(main_frame, textvariable=self.status_var, wraplength=550) # Wrap long messages
+        self.status_label = ttk.Label(main_frame, textvariable=self.status_var, wraplength=550, style="TLabel")
         self.status_label.pack(pady=(5, 5), anchor="w")
         self.status_var.set("Ready.")
 
-        # Credits Label
-        credits_label = ttk.Label(main_frame, text=CREDITS, font=('TkDefaultFont', 8))
+        # Internal queue storage
+        self.url_queue = []
+
+        # Button Frame for clear only
+        button_frame2 = ttk.Frame(main_frame, style="TFrame")
+        button_frame2.pack(fill=tk.X, pady=(10, 5))
+
+        # Clear Button
+        self.clear_button = ttk.Button(button_frame2, text="Clear", command=self.clear_fields, style="TButton")
+        self.clear_button.pack(side=tk.LEFT)
+
+        # Credits Label (only one at the bottom)
+        credits_label = ttk.Label(main_frame, text=CREDITS, font=('TkDefaultFont', 8), style="TLabel")
         credits_label.pack(side=tk.BOTTOM, pady=(10, 0))
 
     def update_status(self, message):
@@ -197,9 +228,47 @@ class App:
 
 
     def clear_fields(self):
-        """Clears the URL text area and status."""
-        self.url_text.delete('1.0', tk.END)
+        """Clears the status label only."""
         self.status_var.set("Fields cleared.")
+
+    def paste_clipboard(self):
+        url = self.root.clipboard_get().strip()
+        def is_valid_url(url):
+            try:
+                parsed = urllib.parse.urlparse(url)
+                return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+            except Exception:
+                return False
+        if url:
+            if not is_valid_url(url):
+                self.status_var.set("Clipboard does not contain a valid HTTP or HTTPS URL. Please copy a valid link starting with http:// or https://.")
+                return
+            if url in self.url_queue:
+                self.status_var.set(f"Duplicate link skipped: {url[:60]}")
+                return
+            self.url_queue.append(url)
+            self.queue_listbox.insert(tk.END, url)
+            self.status_var.set(f"Added to queue: {url[:60]}")
+        else:
+            self.status_var.set("Clipboard is empty or not a valid URL.")
+
+    def clear_queue(self):
+        self.url_queue.clear()
+        self.queue_listbox.delete(0, tk.END)
+        self.status_var.set("Queue cleared.")
+
+    def start_processing(self):
+        if not self.url_queue:
+            messagebox.showwarning("Queue Empty", "Please add at least one URL to the queue.")
+            return
+        # Disable buttons during processing
+        self.convert_button.config(state=tk.DISABLED)
+        self.clear_button.config(state=tk.DISABLED)
+        self.status_var.set("Starting...")
+        thread = threading.Thread(target=process_urls,
+                                  args=(self.url_queue.copy(), self.update_status, self.update_progress, self.show_completion_message),
+                                  daemon=True)
+        thread.start()
 
     def show_completion_message(self, success, message, errors=None):
         """Shows the final status and enables buttons."""
@@ -227,26 +296,16 @@ class App:
         self.clear_button.config(state=tk.NORMAL)
 
     def start_processing(self):
-        """Gets URLs and starts the background processing thread."""
-        urls_raw = self.url_text.get('1.0', tk.END).strip()
-        if not urls_raw:
-            messagebox.showwarning("Input Missing", "Please paste at least one URL.")
+        if not self.url_queue:
+            messagebox.showwarning("Queue Empty", "Please add at least one URL to the queue.")
             return
-
-        urls = [url.strip() for url in urls_raw.splitlines() if url.strip()]
-        if not urls:
-            messagebox.showwarning("Input Missing", "No valid URLs found after stripping.")
-            return
-
         # Disable buttons during processing
         self.convert_button.config(state=tk.DISABLED)
         self.clear_button.config(state=tk.DISABLED)
         self.status_var.set("Starting...")
-
-        # Run processing in a separate thread
         thread = threading.Thread(target=process_urls,
-                                  args=(urls, self.update_status, self.update_progress, self.show_completion_message),
-                                  daemon=True) # Daemon threads exit when the main program exits
+                                  args=(self.url_queue.copy(), self.update_status, self.update_progress, self.show_completion_message),
+                                  daemon=True)
         thread.start()
 
 # --- Main Execution ---
@@ -254,5 +313,8 @@ class App:
 if __name__ == "__main__":
     # Use ThemedTk for automatic theme application
     root = ThemedTk(theme=THEME_NAME)
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.ico")
+    if os.path.exists(icon_path):
+        root.iconbitmap(icon_path)
     app = App(root)
     root.mainloop()
