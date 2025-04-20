@@ -71,6 +71,7 @@ To build a standalone executable (Windows):
    ```
 3. The executable will be in the `dist/` folder.
 
+# WebP URL to PNG Converter
 ## Credits
 
 by @DangerousPixel
