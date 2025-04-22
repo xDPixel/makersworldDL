@@ -283,13 +283,15 @@ class App:
             # You could uncomment this for a popup, but it might be annoying for many errors
             # messagebox.showerror("Processing Errors", "\n".join(errors))
 
-
         self.update_status(final_message)
         if success and not errors:
              messagebox.showinfo("Success", message)
         elif errors :
              messagebox.showwarning("Completed with Errors", final_message)
 
+        # Automatically clear queue after processing
+        self.url_queue.clear()
+        self.queue_listbox.delete(0, tk.END)
 
         # Re-enable buttons
         self.convert_button.config(state=tk.NORMAL)
